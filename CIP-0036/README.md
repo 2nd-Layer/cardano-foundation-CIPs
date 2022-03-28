@@ -38,21 +38,21 @@ In this document, we will use the term 'delegations' to refer to all these possi
 
 ### Registration metadata format
 
-A Catalyst registration transaction is a regular Cardano transaction with a specific transaction metadata associated with it.
+A registration transaction is a regular Cardano transaction with a specific transaction metadata associated with it.
 
-Notably, there should be five entries inside the metadata map:
- - A non-empty array of delegations, as described below;
+Notably, there should be five entries inside a metadata map with key 61284:
+ - A non-empty array of delegations, as described below, or a single voting key.
  - A stake address for the network that this transaction is submitted to (to point to the Ada that is being delegated);
- - A Shelley address discriminated for the same network  this transaction is submitted to to receive rewards.
+ - A Shelley stake address discriminated for the same network  this transaction is submitted to to receive rewards.
  - A nonce that identifies that most recent delegation
- - A number that indicates the purpose of the vote
+ - A non-negative integer that indicates the purpose of the vote. This is an optional field to allow for compatibility with CIP-15, see the relevant [section][compat] for additional details. For now, we define 0 as the value to use for Catalyst, and leave others for future use. A new registration should not invalidate a previous one with a different voting purpose value.
 
 ### Delegation format
 
 A delegation assigns (a portion of) the ADA controlled by one or more UTxOs on mainnet to the voting key in the sidechain as voting power.  The UTxOs can be identified via the stake address at some designated point in time.
 
 Each delegation therefore contains:
-  - a voting key: simply an ED25519 public key. This is the spending credential in the sidechain that will receive voting power from this delegation. For direct voting it's necessary to have the corresponding private key to cast votes in the sidechain. How this key is created is up to the wallet.
+  - a voting key: simply an ED25519 public key. This is the spending credential in the sidechain that will receive voting power from this delegation. For direct voting it's necessary to have the corresponding private key to cast votes in the sidechain. How this key is created is up to the wallet. To avoid linking voting keys directly with Cardano spending keys, HD wallets should use the a path with the following specific segment: m / 1694' / 1815' / account' / chain / address_index
   - the weight that is associated with this key: this is an unsigned integer (CBOR major type 0) that represents the relative weight of this delegation over the total weight of all delegations in the same registration transaction.
   The weight may range from 0 to 2^32-1.  Any greater value is capped to 2^32-1.
 
@@ -79,6 +79,21 @@ as follows.
 This ensures that the voter's total voting power is never accidentally reduced through poor choices of weights,
 and that all voting powers are exact ADA.
 
+### Backwards compatibility with CIP-15
+
+[compat]: #compat
+
+To avoid requiring all user to re-register with the new format, CIP-36 is designed with backward compatibility with CIP-15 in mind.
+For this reason:
+  - Delegations can also be expressed as a single key with no weight. In this case all voting power will be assigned to that voting key.
+  - Voting purpose is an optional field with default 0, which is the value used in Catalyst voting rounds.
+This means that any registration conforming to CIP-15 standard is a perfectly valid CIP-36 registration with the exact same meaning.
+
+### Metadata schema
+
+See the [schema file](./schema.cddl)
+
+
 ### Example 
 
 Voting registration example:
@@ -92,11 +107,11 @@ Voting registration example:
   3: "0x00588e8e1d18cba576a4d35758069fe94e53f638b6faf7c07b8abd2bc5c5cdee47b60edc7772855324c85033c638364214cbfc6627889f81c4",
   // nonce
   4: 5479467
-  // voting_purpose: 0 = Catalyst, 1 = Council Election
+  // voting_purpose: 0 = Catalyst
   5: 0
 }
 ```
-The entries under keys 1, 2, 3, 4 and 5 represent the Catalyst delegation array,
+The entries under keys 1, 2, 3, 4 and 5 represent the Catalyst delegations,
 the staking key on the Cardano network, the address to receive rewards,
 a nonce, and a voting purpose, respectively. A registration with these metadata will be
 considered valid if the following conditions hold:
@@ -120,8 +135,8 @@ a single entry with key 61284 and the registration metadata map in the
 format above is formed, designated here as `sign_data`.
 This data is signed with the staking key as follows: first, the
 blake2b-256 hash of `sign_data` is obtained. This hash is then signed
-using the Ed25519 signature algorithm. The signature metadata entry is
-added to the transaction under key 61285 as a CBOR map with a single entry
+using the Ed25519 signature algorithm. The signature entry is
+added to the transaction metadata under key 61285 as a CBOR map with a single entry
 that consists of the integer key 1 and signature as obtained above as the byte array value.
 
 Signature example:
@@ -131,10 +146,6 @@ Signature example:
   1: "0x8b508822ac89bacb1f9c3a3ef0dc62fd72a0bd3849e2381b17272b68a8f52ea8240dcc855f2264db29a8512bfcd522ab69b982cb011e5f43d0154e72f505f007"
 }
 ```
-
-### Metadata schema
-
-See the [schema file](./schema.cddl)
 
 # Test vector
 
